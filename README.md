@@ -1,2 +1,2 @@
 # pygqrx
-Python bindings for some Qt widgets used by Gqrx
+Python bindings for some Qt widgets used by Gqrx.

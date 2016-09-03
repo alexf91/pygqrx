@@ -5,3 +5,5 @@ sippygqrxCFreqCtrl.cpp
 sippygqrxCMeter.cpp
 sippygqrxCPlotter.cpp
 sippygqrxcmodule.cpp
+moc_*.cpp
+build
