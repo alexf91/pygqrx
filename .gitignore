@@ -1,9 +1,6 @@
 *.o
 *.so
-sipAPIpygqrx.h
-sippygqrxCFreqCtrl.cpp
-sippygqrxCMeter.cpp
-sippygqrxCPlotter.cpp
-sippygqrxcmodule.cpp
+sip*.cpp
+sip*.h
 moc_*.cpp
 build

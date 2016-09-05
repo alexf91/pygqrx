@@ -5,7 +5,7 @@ class CPlotter : public QFrame
 %End
 
 public:
-    explicit CPlotter(QWidget *parent = 0);
+    explicit CPlotter(QWidget *parent /TransferThis/ = 0);
     ~CPlotter();
 
     QSize minimumSizeHint() const;

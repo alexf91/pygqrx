@@ -26,8 +26,6 @@ class BuildExt(build_ext):
 
 os.chdir(os.path.abspath(os.path.dirname(__file__)))
 base_dir = os.getcwd()
-os.environ['CC'] = 'g++'
-os.environ['CXX'] = 'g++'
 
 sip_config = sipconfig.Configuration()
 
@@ -41,6 +39,7 @@ sip_cmd = ' '.join([
 
 
 cflags = [
+    '-g',
     '-Wall',
     '-std=c++14',
     '-fPIC',
@@ -86,8 +85,14 @@ pygqrx = Extension(
         'src/plotter.cpp',
         'src/sippygqrxCFreqCtrl.cpp',
         'src/sippygqrxCMeter.cpp',
-        'src/sippygqrxcmodule.cpp',
         'src/sippygqrxCPlotter.cpp',
+        'src/sippygqrxBookmarks.cpp',
+        'src/sippygqrxTagInfo.cpp',
+        'src/sippygqrxBookmarkInfo.cpp',
+        'src/sippygqrxcmodule.cpp',
+        'src/sippygqrxQList0100BookmarkInfo.cpp',
+        'src/sippygqrxQList0100TagInfo.cpp',
+
     ] + mocked_files,
     include_dirs = ['src'],
     extra_compile_args=cflags,

@@ -7,3 +7,4 @@
 %Include meter.sip
 %Include freqctrl.sip
 %Include plotter.sip
+%Include bookmarks.sip
