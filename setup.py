@@ -32,6 +32,7 @@ sip_config = sipconfig.Configuration()
 sip_cmd = ' '.join([
     sip_config.sip_bin,
     '-c .',
+    '-o',
     '-I /usr/share/sip/PyQt5',
     PyQt5.QtCore.PYQT_CONFIGURATION['sip_flags'],
     'pygqrx.sip'

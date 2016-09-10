@@ -21,7 +21,17 @@ public:
     void setTooltipsEnabled(bool enabled);
     void setPercent2DScreen(int percent);
 
-    void setNewFttData(float *fftData, int size);
+    void setNewFttData(SIP_PYLIST) [void (float *, int)];
+    %MethodCode
+        int size = PyList_Size(a0);
+        float *data = new float[size];
+
+        for(int i=0; i<size; i++)
+            data[i] = PyFloat_AsDouble(PyList_GetItem(a0, i));
+
+        sipCpp->setNewFttData(data, size);
+        delete data;
+    %End
     //void setNewFttData(float *fftData, float *wfData, int size);
 
     void setCenterFreq(quint64 f);
