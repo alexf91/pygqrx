@@ -134,7 +134,6 @@ bool BookmarksTableModel::setData(const QModelIndex &index, const QVariant &valu
             {
                 Q_ASSERT(!value.toString().contains(";")); // may not contain a comma because tablemodel is saved as comma-separated file (csv).
                 //if(DockRxOpt::IsModulationValid(value.toString()))
-                if(1)
                 {
                     info.modulation = value.toString();
                     emit dataChanged(index, index);

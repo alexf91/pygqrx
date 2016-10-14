@@ -82,7 +82,6 @@ public:
         drawOverlay();
     }
 
-    void setMinMaxDB(float min, float max);
     void setHdivDelta(int delta) { m_HdivDelta = delta; }
     void setVdivDelta(int delta) { m_VdivDelta = delta; }
 
@@ -121,7 +120,8 @@ signals:
     void newLowCutFreq(int f);
     void newHighCutFreq(int f);
     void newFilterFreq(int low, int high);  /* substitute for NewLow / NewHigh */
-    void fftRangeChanged(float reflevel, float range);
+    void pandapterRangeChanged(float min, float max);
+    void newZoomLevel(float level);
 
 public slots:
     // zoom functions
@@ -134,7 +134,9 @@ public slots:
     void setFftPlotColor(const QColor color);
     void setFftFill(bool enabled);
     void setPeakHold(bool enabled);
-    void setFftRange(float reflevel, float range);
+    void setFftRange(float min, float max);
+    void setPandapterRange(float min, float max);
+    void setWaterfallRange(float min, float max);
     void setPeakDetection(bool enabled, float c);
     void updateOverlay();
 
@@ -206,8 +208,8 @@ private:
     QString     m_HDivText[HORZ_DIVS_MAX+1];
     bool        m_Running;
     bool        m_DrawOverlay;
-    qint64      m_CenterFreq;
-    qint64      m_FftCenter;
+    qint64      m_CenterFreq;       // The HW frequency
+    qint64      m_FftCenter;        // Center freq in the -span ... +span range
     qint64      m_DemodCenterFreq;
     qint64      m_StartFreqAdj;
     qint64      m_FreqPerDiv;
@@ -232,8 +234,12 @@ private:
 
     int         m_HorDivs;   /*!< Current number of horizontal divisions. Calculated from width. */
     int         m_VerDivs;   /*!< Current number of vertical divisions. Calculated from height. */
-    float       m_MaxdB;
-    float       m_MindB;
+
+    float       m_PandMindB;
+    float       m_PandMaxdB;
+    float       m_WfMindB;
+    float       m_WfMaxdB;
+
     qint64      m_Span;
     float       m_SampleFreq;    /*!< Sample rate. */
     qint32      m_FreqUnits;

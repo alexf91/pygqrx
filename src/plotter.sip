@@ -50,7 +50,6 @@ public:
     /* Shown bandwidth around SetCenterFreq() */
     void setSpanFreq(quint32 s);
 
-    void setMinMaxDB(float min, float max);
     void setHdivDelta(int delta);
     void setVdivDelta(int delta);
 
