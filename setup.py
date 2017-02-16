@@ -84,6 +84,7 @@ pygqrx = Extension(
         'src/freqctrl.cpp',
         'src/meter.cpp',
         'src/plotter.cpp',
+        'src/fftbuffer.cpp',
         'src/sippygqrxCFreqCtrl.cpp',
         'src/sippygqrxCMeter.cpp',
         'src/sippygqrxCPlotter.cpp',
