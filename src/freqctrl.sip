@@ -31,6 +31,7 @@ public:
     void setUnitsColor(QColor cr);
     void setHighlightColor(QColor cr);
     qint64 getFrequency();
+    void setResetLowerDigits(bool reset);
 
 signals:
     void newFrequency(qint64 freq); //emitted when frequency has changed
@@ -48,4 +49,3 @@ protected:      //overrides for this control
     void keyPressEvent(QKeyEvent *);
 
 };
-

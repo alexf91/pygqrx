@@ -24,7 +24,7 @@
 #include <QStringList>
 #include "bookmarks.h"
 #include "bookmarkstablemodel.h"
-//#include "dockrxopt.h"
+#include "dockrxopt.h"
 
 
 BookmarksTableModel::BookmarksTableModel(QObject *parent) :
@@ -133,7 +133,7 @@ bool BookmarksTableModel::setData(const QModelIndex &index, const QVariant &valu
         case COL_MODULATION:
             {
                 Q_ASSERT(!value.toString().contains(";")); // may not contain a comma because tablemodel is saved as comma-separated file (csv).
-                //if(DockRxOpt::IsModulationValid(value.toString()))
+                if(DockRxOpt::IsModulationValid(value.toString()))
                 {
                     info.modulation = value.toString();
                     emit dataChanged(index, index);

@@ -205,7 +205,8 @@ CPlotter::CPlotter(QWidget *parent) : QFrame(parent)
     msec_per_wfline = 0;
     wf_span = 0;
     fft_rate = 15;
-    memset(m_wfbuf, 255, MAX_SCREENSIZE);
+
+    m_wfAccum = 0;
 }
 
 CPlotter::~CPlotter()
@@ -390,6 +391,9 @@ void CPlotter::mouseMoveEvent(QMouseEvent* event)
                 setFftCenterFreq(m_FftCenter + delta_hz);
             }
             updateOverlay();
+            if(delta_px != 0) {
+                redrawWaterfall(delta_px);
+            }
 
             m_PeakHoldValid = false;
 
@@ -540,7 +544,7 @@ void CPlotter::setWaterfallSpan(quint64 span_ms)
 void CPlotter::clearWaterfall()
 {
     m_WaterfallPixmap.fill(Qt::black);
-    memset(m_wfbuf, 255, MAX_SCREENSIZE);
+    buffer.clear();
 }
 
 /**
@@ -774,6 +778,8 @@ void CPlotter::zoomStepX(float step, int x)
     emit newZoomLevel(factor);
     qDebug() << QString("Spectrum zoom: %1x").arg(factor, 0, 'f', 1);
 
+    redrawWaterfall();
+
     m_PeakHoldValid = false;
 }
 
@@ -881,7 +887,8 @@ void CPlotter::resizeEvent(QResizeEvent* )
 
         if (wf_span > 0)
             msec_per_wfline = wf_span / height;
-        memset(m_wfbuf, 255, MAX_SCREENSIZE);
+
+        buffer.setSize(m_WaterfallPixmap.height());
     }
 
     drawOverlay();
@@ -900,92 +907,121 @@ void CPlotter::paintEvent(QPaintEvent *)
 // Called to update spectrum data for displaying on the screen
 void CPlotter::draw()
 {
-    int     i, n;
-    int     w;
-    int     h;
-    int     xmin, xmax;
-
     if (m_DrawOverlay)
     {
         drawOverlay();
         m_DrawOverlay = false;
     }
 
-    QPoint LineBuf[MAX_SCREENSIZE];
-
     if (!m_Running)
         return;
 
-    // get/draw the waterfall
-    w = m_WaterfallPixmap.width();
-    h = m_WaterfallPixmap.height();
+    drawWaterfall();
+    draw2DSpectrum();
+
+    // trigger a new paintEvent
+    update();
+}
+
+void CPlotter::drawWaterfall()
+{
+    int w = m_WaterfallPixmap.width();
+    int h = m_WaterfallPixmap.height();
 
     // no need to draw if pixmap is invisible
     if (w != 0 && h != 0)
     {
         quint64     tnow_ms = time_ms();
+        bool update_now = accumulateWaterfallData();
 
-        // get scaled FFT data
-        n = qMin(w, MAX_SCREENSIZE);
-        getScreenIntegerFFTData(255, n, m_WfMaxdB, m_WfMindB,
-                                m_FftCenter - (qint64)m_Span / 2,
-                                m_FftCenter + (qint64)m_Span / 2,
-                                m_wfData, m_fftbuf,
-                                &xmin, &xmax);
-
-        if (msec_per_wfline > 0)
-        {
-            // not in "auto" mode, so accumulate waterfall data
-            for (i = 0; i < n; i++)
-            {
-                // average
-                //m_wfbuf[i] = (m_wfbuf[i] + m_fftbuf[i]) / 2;
-
-                // peak (0..255 where 255 is min)
-                if (m_fftbuf[i] < m_wfbuf[i])
-                    m_wfbuf[i] = m_fftbuf[i];
-            }
+        if(!update_now) {
+            return;
         }
 
-        // is it time to update waterfall?
-        if (tnow_ms - tlast_wf_ms >= msec_per_wfline)
-        {
-            tlast_wf_ms = tnow_ms;
+        // Put data into buffer
+        buffer.addData(m_wfAccum, m_fftDataSize, m_CenterFreq - m_SampleFreq/2, m_CenterFreq + m_SampleFreq/2);
 
-            // move current data down one line(must do before attaching a QPainter object)
-            m_WaterfallPixmap.scroll(0, 1, 0, 0, w, h);
+        // move current data down one line
+        m_WaterfallPixmap.scroll(0, 1, 0, 0, w, h);
+        drawWaterfallLine(0, 0, w);
+        tlast_wf_ms = tnow_ms;
 
-            QPainter painter1(&m_WaterfallPixmap);
+        if(msec_per_wfline != 0) {
+            memset(m_wfAccum, 0, m_fftDataSize * sizeof(float));
+        }
+    }
+}
 
-            // draw new line of fft data at top of waterfall bitmap
-            painter1.setPen(QColor(0, 0, 0));
-            for (i = 0; i < xmin; i++)
-                painter1.drawPoint(i, 0);
-            for (i = xmax; i < w; i++)
-                painter1.drawPoint(i, 0);
+void CPlotter::drawWaterfallLine(int line, int min_px, int max_px) {
+    int w = m_WaterfallPixmap.width();
+    int n = qMin(max_px-min_px, MAX_SCREENSIZE);
+    int xmin, xmax;
+    QRgb linebuffer[n];
 
-            if (msec_per_wfline > 0)
-            {
-                // user set time span
-                for (i = xmin; i < xmax; i++)
-                {
-                    painter1.setPen(m_ColorTbl[255 - m_wfbuf[i]]);
-                    painter1.drawPoint(i, 0);
-                    m_wfbuf[i] = 255;
-                }
-            }
-            else
-            {
-                for (i = xmin; i < xmax; i++)
-                {
-                    painter1.setPen(m_ColorTbl[255 - m_fftbuf[i]]);
-                    painter1.drawPoint(i, 0);
-                }
-            }
+    qint64 freq_start = m_FftCenter - m_Span/2 + m_Span * min_px / w;
+    qint64 freq_end   = m_FftCenter - m_Span/2 + m_Span * max_px / w;
+
+    QPainter painter1(&m_WaterfallPixmap);
+
+    // draw new line of fft data at top of waterfall bitmap
+    if(line == 0) {
+        getScreenIntegerFFTData(255, n, m_WfMaxdB, m_WfMindB,
+                                freq_start,
+                                freq_end,
+                                m_wfAccum, m_fftbuf,
+                                &xmin, &xmax);
+    } else {
+        bool exists = buffer.getLine(line, 255, n,
+                       m_WfMindB, m_WfMaxdB,
+                       m_CenterFreq + freq_start, m_CenterFreq + freq_end,
+                       &xmin, &xmax,
+                       m_fftbuf);
+        if(!exists) {
+            xmin = xmax = -1;
         }
     }
 
-    // get/draw the 2D spectrum
+    int i;
+    for(i = 0; i < xmin; i++) {
+        linebuffer[i] = m_ColorTbl[0].rgb();
+    }
+    for(/* i == xmin or 0 */; i < xmax; i++) {
+        linebuffer[i] = m_ColorTbl[255 - m_fftbuf[i]].rgb();
+    }
+    for(/* i == xmax or 0 */; i < n; i++) {
+        linebuffer[i] = m_ColorTbl[0].rgb();
+    }
+    painter1.drawImage(QPointF(min_px, line), QImage((uchar*)linebuffer, n, 1, QImage::Format_RGB32));
+}
+
+void CPlotter::redrawWaterfall(qint64 delta_px) {
+    int min_px, max_px;
+    if(delta_px == 0) {
+        min_px = 0;
+        max_px = m_WaterfallPixmap.width();
+    } else if(delta_px < 0) {
+        m_WaterfallPixmap.scroll(-delta_px, 0, 0, 0, m_WaterfallPixmap.width(), m_WaterfallPixmap.height());
+        min_px = 0;
+        max_px = -delta_px;
+    } else {
+        m_WaterfallPixmap.scroll(-delta_px, 0, 0, 0, m_WaterfallPixmap.width(), m_WaterfallPixmap.height());
+        min_px = m_WaterfallPixmap.width() - delta_px;
+        max_px = m_WaterfallPixmap.width();
+    }
+    for(int i = 0; i < m_WaterfallPixmap.height(); i++) {
+        drawWaterfallLine(i, min_px, max_px);
+    }
+}
+
+void CPlotter::draw2DSpectrum()
+{
+
+    int i, n;
+    int xmin, xmax;
+    int w, h;
+
+    QPoint LineBuf[MAX_SCREENSIZE];
+
     w = m_2DPixmap.width();
     h = m_2DPixmap.height();
 
@@ -1100,9 +1136,22 @@ void CPlotter::draw()
       painter2.end();
 
     }
+}
 
-    // trigger a new paintEvent
-    update();
+bool CPlotter::accumulateWaterfallData()
+{
+    quint64 tnow_ms = time_ms();
+
+    if(msec_per_wfline == 0) {
+        memcpy(m_wfAccum, m_wfData, m_fftDataSize * sizeof(float));
+    } else {
+        for(int i = 0; i < m_fftDataSize; i++) {
+            if(m_wfData[i] < m_wfAccum[i]) {
+                m_wfAccum[i] = m_wfData[i];
+            }
+        }
+    }
+    return (tnow_ms - tlast_wf_ms) >= msec_per_wfline;
 }
 
 /**
@@ -1115,15 +1164,7 @@ void CPlotter::draw()
  */
 void CPlotter::setNewFttData(float *fftData, int size)
 {
-    /** FIXME **/
-    if (!m_Running)
-        m_Running = true;
-
-    m_wfData = fftData;
-    m_fftData = fftData;
-    m_fftDataSize = size;
-
-    draw();
+    setNewFttData(fftData, fftData, size);
 }
 
 /**
@@ -1144,7 +1185,14 @@ void CPlotter::setNewFttData(float *fftData, float *wfData, int size)
 
     m_wfData = wfData;
     m_fftData = fftData;
-    m_fftDataSize = size;
+
+    if(size != m_fftDataSize) {
+        if(m_wfAccum != 0) {
+            free(m_wfAccum);
+        }
+        m_wfAccum = (float*) calloc(size, sizeof(float));
+        m_fftDataSize = size;
+    }
 
     draw();
 }
@@ -1158,7 +1206,6 @@ void CPlotter::getScreenIntegerFFTData(qint32 plotHeight, qint32 plotWidth,
     qint32 i;
     qint32 y;
     qint32 x;
-    qint32 ymax = 10000;
     qint32 xprev = -1;
     qint32 minbin, maxbin;
     qint32 m_BinMin, m_BinMax;
@@ -1173,11 +1220,17 @@ void CPlotter::getScreenIntegerFFTData(qint32 plotHeight, qint32 plotWidth,
     m_BinMax = (qint32)((float)stopFreq * (float)m_FFTSize / m_SampleFreq);
     m_BinMax += (m_FFTSize/2);
 
-    minbin = m_BinMin < 0 ? 0 : m_BinMin;
-    if (m_BinMin > m_FFTSize)
+    if(m_BinMin >= m_FFTSize || m_BinMax <= 0) {
+        *xmin = *xmax = -1;
+        return;
+    }
+
+    if (m_BinMin >= m_FFTSize)
         m_BinMin = m_FFTSize - 1;
     if (m_BinMax <= m_BinMin)
         m_BinMax = m_BinMin + 1;
+
+    minbin = m_BinMin < 0 ? 0 : m_BinMin;
     maxbin = m_BinMax < m_FFTSize ? m_BinMax : m_FFTSize;
     bool largeFft = (m_BinMax-m_BinMin) > plotWidth; // true if more fft point than plot points
 
@@ -1214,10 +1267,9 @@ void CPlotter::getScreenIntegerFFTData(qint32 plotHeight, qint32 plotWidth,
 
             if (x == xprev)   // still mappped to same fft bin coordinate
             {
-                if (y < ymax) // store only the max value
+                if (y < outBuf[x]) // store only the max value
                 {
                     outBuf[x] = y;
-                    ymax = y;
                 }
 
             }
@@ -1225,7 +1277,6 @@ void CPlotter::getScreenIntegerFFTData(qint32 plotHeight, qint32 plotWidth,
             {
                 outBuf[x] = y;
                 xprev = x;
-                ymax = y;
             }
         }
     }
@@ -1276,6 +1327,7 @@ void CPlotter::setWaterfallRange(float min, float max)
 
     m_WfMindB = min;
     m_WfMaxdB = max;
+    redrawWaterfall();
     // no overlay change is necessary
 }
 
@@ -1336,8 +1388,11 @@ void CPlotter::drawOverlay()
 #endif
 
             int level = 0;
-            for (; level < nLevels && tagEnd[level] > x; level++);
-                level %= nLevels;
+            while(level < nLevels && tagEnd[level] > x)
+                level++;
+            
+            if(level == nLevels)
+                level = 0;
 
             tagEnd[level] = x + nameWidth + slant - 1;
             m_BookmarkTags.append(qMakePair<QRect, qint64>(QRect(x, level * levelHeight, nameWidth + slant, fontHeight), bookmarks[i].frequency));
@@ -1624,6 +1679,8 @@ void CPlotter::setCenterFreq(quint64 f)
     updateOverlay();
 
     m_PeakHoldValid = false;
+
+    redrawWaterfall();
 }
 
 // Ensure overlay is updated by either scheduling or forcing a redraw
