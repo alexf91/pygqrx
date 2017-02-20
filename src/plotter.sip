@@ -30,7 +30,7 @@ public:
             data[i] = PyFloat_AsDouble(PyList_GetItem(a0, i));
 
         sipCpp->setNewFttData(data, size);
-        delete data;
+        delete[] data;
     %End
     //void setNewFttData(float *fftData, float *wfData, int size);
 
@@ -44,6 +44,14 @@ public:
     qint64 getFilterOffset();
     int getFilterBw();
     void setHiLowCutFrequencies(int LowCut, int HiCut);
+    SIP_PYTUPLE getHiLowCutFrequencies() [void (int *, int *)];
+    %MethodCode
+        int lo, hi;
+        sipCpp->getHiLowCutFrequencies(&lo, &hi);
+        PyObject *pylo = PyInt_FromLong(lo);
+        PyObject *pyhi = PyInt_FromLong(hi);
+        sipRes = PyTuple_Pack(2, pylo, pyhi);
+    %End
 
     void setDemodRanges(int FLowCmin, int FLowCmax, int FHiCmin, int FHiCmax, bool symetric);
 
